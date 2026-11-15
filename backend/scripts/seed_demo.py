@@ -2,9 +2,9 @@ import random,json
 from datetime import datetime,timezone
 from sqlalchemy import select,func
 from src.config.database import Base,engine,SessionLocal
-from src.models.entities import User,Process,Sample,Assessment
+from src.models.entities import User,Process,Sample,Assessment,ExpectedRange,SummaryPackage
 from src.utils.security import hash_password
-from src.services.assessments import snapshot_for
+from src.services.assessments import snapshot_for,summary_snapshot_for
 
 def seed():
     Base.metadata.create_all(engine);rng=random.Random(3105)
@@ -25,5 +25,20 @@ def seed():
         if not db.scalar(select(Assessment).where(Assessment.title==title)):
             ids=db.scalars(select(Process.id).where(Process.code.in_(['HC-S1','HC-S2','HC-S3'])).order_by(Process.id)).all()
             db.add(Assessment(title=title,lot='HC-1115',snapshot=snapshot_for(db,ids,'HC-1115'),status='queued',created_at=datetime.now(timezone.utc).isoformat()));db.commit()
-        counts={t.__tablename__:db.scalar(select(func.count()).select_from(t)) for t in [User,Process,Sample,Assessment]};print(json.dumps(counts));return counts
+        # 外协汇总包演示：HC-1116 批次只接收每包 n/均值/样本标准差，不展开逐条测量
+        now=datetime.now(timezone.utc).isoformat()
+        for j,mean in enumerate([22.9,25.4,23.8],1):
+            process=db.scalar(select(Process).where(Process.code==f'HC-S{j}'))
+            if not db.scalar(select(ExpectedRange).where(ExpectedRange.process_id==process.id,ExpectedRange.lot=='HC-1116')):
+                db.add(ExpectedRange(process_id=process.id,lot='HC-1116',start_no=1,end_no=40,note='外协第一批 40 条',created_by='analyst@demo.local',created_at=now))
+            if not db.scalar(select(SummaryPackage).where(SummaryPackage.package_no==f'PKG-1116-S{j}')):
+                values=[round(max(1,rng.gauss(mean,1.6)),2) for _ in range(40)]
+                n=len(values);m=sum(values)/n;sd=(sum((v-m)**2 for v in values)/(n-1))**.5
+                db.add(SummaryPackage(package_no=f'PKG-1116-S{j}',process_id=process.id,lot='HC-1116',start_no=1,end_no=40,n=n,mean=m,sd=sd,note='外协汇总包，原始试条由外协留存',received_by='analyst@demo.local',created_at=now))
+        db.commit()
+        title='HC-1116 外协汇总包首轮复核'
+        if not db.scalar(select(Assessment).where(Assessment.title==title)):
+            ids=db.scalars(select(Process.id).where(Process.code.in_(['HC-S1','HC-S2','HC-S3'])).order_by(Process.id)).all()
+            db.add(Assessment(title=title,lot='HC-1116',snapshot=summary_snapshot_for(ids,'HC-1116'),status='queued',created_at=now));db.commit()
+        counts={t.__tablename__:db.scalar(select(func.count()).select_from(t)) for t in [User,Process,Sample,Assessment,ExpectedRange,SummaryPackage]};print(json.dumps(counts));return counts
 if __name__=='__main__':seed()

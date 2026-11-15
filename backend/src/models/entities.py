@@ -1,4 +1,4 @@
-from sqlalchemy import String,Float,Boolean,Integer,ForeignKey,JSON,Text
+from sqlalchemy import String,Float,Boolean,Integer,ForeignKey,JSON,Text,UniqueConstraint
 from sqlalchemy.orm import Mapped,mapped_column
 from src.config.database import Base
 class User(Base):
@@ -38,6 +38,31 @@ class Assessment(Base):
     selected_process_id:Mapped[int|None]=mapped_column(ForeignKey('processes.id'),nullable=True)
     approved:Mapped[bool]=mapped_column(Boolean,default=False)
     approved_by:Mapped[str]=mapped_column(String(120),default='')
+    created_at:Mapped[str]=mapped_column(String(40))
+class ExpectedRange(Base):
+    __tablename__='expected_ranges'
+    __table_args__=(UniqueConstraint('process_id','lot','start_no','end_no',name='uq_expected_range'),)
+    id:Mapped[int]=mapped_column(primary_key=True)
+    process_id:Mapped[int]=mapped_column(ForeignKey('processes.id'))
+    lot:Mapped[str]=mapped_column(String(60))
+    start_no:Mapped[int]=mapped_column(Integer)
+    end_no:Mapped[int]=mapped_column(Integer)
+    note:Mapped[str]=mapped_column(Text,default='')
+    created_by:Mapped[str]=mapped_column(String(120),default='')
+    created_at:Mapped[str]=mapped_column(String(40))
+class SummaryPackage(Base):
+    __tablename__='summary_packages'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    package_no:Mapped[str]=mapped_column(String(50),unique=True)
+    process_id:Mapped[int]=mapped_column(ForeignKey('processes.id'))
+    lot:Mapped[str]=mapped_column(String(60))
+    start_no:Mapped[int]=mapped_column(Integer)
+    end_no:Mapped[int]=mapped_column(Integer)
+    n:Mapped[int]=mapped_column(Integer)
+    mean:Mapped[float]=mapped_column(Float)
+    sd:Mapped[float]=mapped_column(Float)
+    note:Mapped[str]=mapped_column(Text,default='')
+    received_by:Mapped[str]=mapped_column(String(120),default='')
     created_at:Mapped[str]=mapped_column(String(40))
 class Audit(Base):
     __tablename__='audit_logs'
